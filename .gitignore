@@ -2,20 +2,20 @@
 #
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
-*/[Ll]ibrary/
-*/[Tt]emp/
-*/[Oo]bj/
-*/[Bb]uild/
-*/[Bb]uilds/
-*/[Ll]ogs/
-*/[Uu]ser[Ss]ettings/
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
 
 # MemoryCaptures can get excessive in size.
 # They also could contain extremely sensitive data
-*/[Mm]emoryCaptures/
+/[Mm]emoryCaptures/
 
 # Recordings can get excessive in size
-*/[Rr]ecordings/
+/[Rr]ecordings/
 
 # Uncomment this line if you wish to ignore the asset store tools plugin
 # /[Aa]ssets/AssetStoreTools*
@@ -72,10 +72,10 @@ crashlytics-build.properties
 */[Aa]ssets/[Ss]treamingAssets/aa/*
 
 # Package Files
-**/[Pp]olybrush [Dd]ata/
-**/[Pp]roBuilder [Dd]ata/
-**/ProjectSettings/Packages/com.unity.polybrush/Settings.json
-**/ProjectSettings/Packages/com.unity.probuilder/Settings.json
+/[Pp]olybrush [Dd]ata/
+/[Pp]roBuilder [Dd]ata/
+/ProjectSettings/Packages/com.unity.polybrush/Settings.json
+/ProjectSettings/Packages/com.unity.probuilder/Settings.json
 
 # Never ignore DLLs in the FMOD subfolder.
 !/[Aa]ssets/Plugins/FMOD/**/lib/*
@@ -85,11 +85,11 @@ crashlytics-build.properties
 !/[Aa]ssets/Editor Default Resources/FMOD/*
 
 # Ignore the Cache folder since it is updated locally.
-*/[Aa]ssets/Plugins/FMOD/Cache/*
+/[Aa]ssets/Plugins/FMOD/Cache/*
 
 # Ignore bank files in the StreamingAssets folder.
-*/[Aa]ssets/StreamingAssets/**/*.bank
-*/[Aa]ssets/StreamingAssets/**/*.bank.meta
+/[Aa]ssets/StreamingAssets/**/*.bank
+/[Aa]ssets/StreamingAssets/**/*.bank.meta
 
 # If the source bank files are kept outside of the StreamingAssets folder then these can be ignored.
 # Log files can be ignored.
