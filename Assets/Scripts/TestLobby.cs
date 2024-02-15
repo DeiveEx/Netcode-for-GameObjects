@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Ignix.Debug.Console;
 using Unity.Services.Core;
 using Unity.Services.Authentication;
 using Unity.Services.Lobbies;
@@ -17,7 +18,7 @@ public class TestLobby : MonoBehaviour
     private bool _createPrivateLobby;
     private string _playerName;
     private string _gameMode = "DeathMatch";
-    
+
     private async void Start()
     {
         _playerName = $"Player_{Random.Range(10, 99)}";
@@ -36,6 +37,7 @@ public class TestLobby : MonoBehaviour
         StartCoroutine(LobbyPoolForUpdatesRoutine());
     }
 
+    [DevCommand]
     private async void CreateLobby()
     {
         string lobbyName = "MyLobby";
