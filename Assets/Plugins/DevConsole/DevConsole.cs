@@ -9,12 +9,58 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
-namespace DevConsole
+namespace Ignix.Debug.Console
 {
-	public class DevConsole_Controler : MonoBehaviour
+	public enum TargetType
 	{
-		#region Properties
+		None,
+		All,
+		Single,
+		Registry,
+	}
+	
+	public class DevConsole : MonoBehaviour
+	{
+		#region SubTypes
+		
+		[Serializable]
+		public class ConsoleCommand
+		{
+			public delegate void CommandFunction();
+
+			public string name;
+			public string description;
+			public object instance;
+			public MethodInfo methodInfo;
+			public ParameterInfo[] parametersInfos;
+			public string category;
+			public CommandFunction dynamicMethod;
+			public TargetType targetType;
+			public Type sourceType;
+
+			public string GetParametersString()
+			{
+				return string.Join(", ", parametersInfos.Select(x => x.ParameterType.Name));
+			}
+		}
+		
+		#endregion
+		
+		#region Fields
+
+		public static DevConsole Instance;
+		
+		//Constants
+		private const int maxCharacters = 15000;
+		private WaitForEndOfFrame waitForEndOfFrame = new WaitForEndOfFrame();
+		private Regex extractFuncRegex = new Regex(@"(?<func>\w+(?=\())\s*\((?<params>[^()]*)\)");
+		private Regex extractArgsRegex = new Regex(@"(\[.+?\])|(\w+)");
+		
 		[Header("Debug")]
 		public bool startOpened;
 		public bool showFunctionInfo;
@@ -23,7 +69,11 @@ namespace DevConsole
 		public bool allowQuickCommands = true;
 		[Tooltip("If enabled, pressing ENTER will always autocomplete with the first suggestion, if available.")]
 		public bool alwaysAutoComplete;
-		public string consoleKey = "f1";
+#if ENABLE_INPUT_SYSTEM
+		public InputAction consoleAction;
+#else
+		public KeyCode consoleKey = KeyCode.BackQuote;
+#endif
 		public Color suggestionHighlight = Color.green;
 		public int historySize = 100;
 		[Header("UI Components")]
@@ -36,12 +86,6 @@ namespace DevConsole
 		[Header("Events")]
 		public UnityEvent consoleOpen;
 		public UnityEvent consoleClose;
-
-		//Constants
-		private const int maxCharacters = 15000;
-		private WaitForEndOfFrame waitForEndOfFrame = new WaitForEndOfFrame();
-		private Regex extractFuncRegex = new Regex(@"(?<func>\w+(?=\())\s*\((?<params>[^()]*)\)");
-		private Regex extractArgsRegex = new Regex(@"(\[.+?\])|(\w+)");
 
 		private RectTransform myTransform;
 		private RectTransform scrollRectTransform;
@@ -57,37 +101,35 @@ namespace DevConsole
 		private int selectedSuggestionID;
 		private int selectedHistoryID;
 		private Dictionary<string, object> heldParams = new Dictionary<string, object>();
+		private Dictionary<Type, object> registry = new Dictionary<Type, object>();
+		
 		#endregion
 
-		#region Encapsulated Classes
-		[Serializable]
-		public class ConsoleCommand
-		{
-			public delegate void CommandFunction();
-
-			public string name;
-			public string description;
-			public object instance;
-			public MethodInfo methodInfo;
-			public ParameterInfo[] parametersInfos;
-			public string category;
-			public CommandFunction dynamicMethod;
-
-			public string GetParametersString()
-			{
-				return string.Join(", ", parametersInfos.Select(x => x.ParameterType.Name));
-			}
-		}
-		#endregion
-
-		#region MonoBehavior
+		#region Unity Events
+		
 		private void Awake()
 		{
+			//Singleton
+			if (Instance == null)
+			{
+				Instance = this;
+			}
+			else if(Instance != this)
+			{
+				Destroy(gameObject);
+				return;
+			}
+			
 			myTransform = GetComponent<RectTransform>();
 			scrollRectTransform = scrollRect.GetComponent<RectTransform>();
 			logTextTransform = logText.GetComponent<RectTransform>();
 			suggestionTextTransform = suggestionText.GetComponent<RectTransform>();
 			suggestionBoxTransform = suggestionBox.GetComponent<RectTransform>();
+
+#if ENABLE_INPUT_SYSTEM
+			consoleAction.performed += context => ShowConsole(!consoleScreen.activeSelf);
+			consoleAction.Enable();
+#endif
 		}
 
 		private void Start()
@@ -101,11 +143,12 @@ namespace DevConsole
 
 			if (EventSystem.current == null)
 			{
-				Debug.LogError("No event system found! The console might not work!");
+				UnityEngine.Debug.LogError("No event system found! The console might not work!");
 			}
 
 			//Registering the basic commands
 			RegisterBasicCommands();
+			RegisterCommandsFromAttribute();
 
 			suggestionBox.SetActive(false);
 
@@ -113,13 +156,16 @@ namespace DevConsole
 		}
 
 		private void Update()
-		{
+		{	
 			//Toggle console
+			
+#if !ENABLE_INPUT_SYSTEM
 			if (Input.GetKeyDown(consoleKey))
 			{
 				ShowConsole(!consoleScreen.activeSelf);
 			}
-
+#endif
+			
 			//When the console is active
 			if (consoleScreen.activeSelf)
 			{
@@ -144,9 +190,11 @@ namespace DevConsole
 				}
 			}
 		}
+		
 		#endregion
 
 		#region Append Message
+		
 		public void AppendLog(string text, Color? color = null)
 		{
 			if (color != null && !string.IsNullOrEmpty(text))
@@ -205,9 +253,11 @@ namespace DevConsole
 			AppendLog(": ", textColor);
 			AppendLogLine(message);
 		}
+		
 		#endregion
 
 		#region Console Commands
+		
 		public void ShowConsole(bool show)
 		{
 			consoleScreen.SetActive(show);
@@ -265,6 +315,7 @@ namespace DevConsole
 					methodInfo = methods[i],
 					parametersInfos = parametersInfo,
 					category = category,
+					targetType = TargetType.None,
 				};
 
 				commands.Add(command);
@@ -277,7 +328,8 @@ namespace DevConsole
 				name = name,
 				description = description,
 				category = category,
-				dynamicMethod = function
+				dynamicMethod = function,
+				targetType = TargetType.None,
 			};
 
 			commands.Add(command);
@@ -381,9 +433,27 @@ namespace DevConsole
 
 			FindSuggestions(text);
 		}
+
+		public void RegisterObject<T>(T instance)
+		{
+			var type = typeof(T);
+
+			if (registry.ContainsKey(type))
+				UnityEngine.Debug.LogWarning($"An object of type {type} is already registered in the registry. It will be replaced.");
+
+			registry[type] = instance;
+		}
+
+		public void UnregisterObject<T>(T instance)
+		{
+			var type = typeof(T);
+			registry.Remove(type);
+		}
+		
 		#endregion
 
 		#region Execution
+		
 		private string ExtractFunction(string commandText)
 		{
 			//Replace each match for a key that will be replaced with an object later on (if needed)
@@ -421,7 +491,7 @@ namespace DevConsole
 
 				if (showFunctionInfo)
 				{
-					Debug.Log($"\nFuncName: {functionName};\nParamCount: {actualParameters.Count};\nRawParams: {parametersText};\nFinalParams: {string.Join("; ", actualParameters.Select(x => x.ToString()))}");
+					UnityEngine.Debug.Log($"\nFuncName: {functionName};\nParamCount: {actualParameters.Count};\nRawParams: {parametersText};\nFinalParams: {string.Join("; ", actualParameters.Select(x => x.ToString()))}");
 				}
 
 				//Add the key to the dictionary to be replaced later, if needed
@@ -435,7 +505,7 @@ namespace DevConsole
 
 		private object ExecuteCommand(string commandName, object[] parameters)
 		{
-			//See if there's at least one registerd command that matches the name
+			//See if there's at least one registered command that matches the name
 			ConsoleCommand[] validCommands = commands.Where(x => x.name == commandName).ToArray();
 
 			if (validCommands.Length == 0)
@@ -445,29 +515,53 @@ namespace DevConsole
 			}
 
 			//Find the command that has the same parameters types and Invoke the method
-			foreach (var item in validCommands)
+			foreach (var command in validCommands)
 			{
-				if(item.instance == null && item.dynamicMethod != null)
+				if(command.instance == null && command.dynamicMethod != null)
 				{
-					item.dynamicMethod.Invoke();
+					command.dynamicMethod.Invoke();
 					return null;
 				}
 
-				if (parameters.Length == item.parametersInfos.Length)
+				if (parameters.Length == command.parametersInfos.Length)
 				{
 					try
 					{
-						object returnValue = item.methodInfo.Invoke(item.instance, parameters);
-						return returnValue;
+						if (command.targetType == TargetType.None)
+						{
+							object returnValue = command.methodInfo.Invoke(command.instance, parameters);
+							return returnValue;
+						}
+
+						var targets = GetTargets(command.sourceType, command.targetType);
+
+						if (targets.Length == 0)
+						{
+							UnityEngine.Debug.LogError($"No target of type {command.targetType} was found for command {command.name}");
+							return null;
+						}
+						
+						if (targets.Length == 1)
+						{
+							return command.methodInfo.Invoke(targets[0], parameters);
+						}
+
+						foreach (var target in targets)
+						{
+							command.methodInfo.Invoke(target, parameters);
+						}
+
+						//We can't return multiple instances
+						return null;
 					}
-					catch
+					catch (Exception e)
 					{
-						continue;
+						UnityEngine.Debug.LogError(e);
 					}
 				}
 			}
 
-			//If we coudln't execute any command, we show an error
+			//If we couldn't execute any command, we show an error
 			AppendLogErrorLine($"The parameters for the command \"{commandName}\" are invalid. Expected:");
 
 			for (int i = 0; i < validCommands.Length; i++)
@@ -561,9 +655,11 @@ namespace DevConsole
 		{
 			return (T) Convert.ChangeType(value, typeof(T));
 		}
+		
 		#endregion
 
 		#region Suggestions
+		
 		private void FindSuggestions(string commandLine)
 		{
 			if (string.IsNullOrEmpty(commandLine))
@@ -659,9 +755,11 @@ namespace DevConsole
 
 			LayoutRebuilder.ForceRebuildLayoutImmediate(suggestionTextTransform);
 		}
+		
 		#endregion
 
 		#region History
+		
 		private void SelectHistory()
 		{
 			//Change history
@@ -710,7 +808,7 @@ namespace DevConsole
 
 		public void GoToEndOfLog()
 		{
-			if (scrollRect.gameObject.activeInHierarchy)
+			if (scrollRect != null && scrollRect.gameObject.activeInHierarchy)
 			{
 				StartCoroutine(GoToEndOfLog_Routine());
 			}
@@ -721,9 +819,35 @@ namespace DevConsole
 			yield return waitForEndOfFrame;
 			scrollRect.verticalNormalizedPosition = 0;
 		}
+
+		private object[] GetTargets(Type type, TargetType targetType)
+		{
+			object[] targets = null;
+			
+			switch (targetType)
+			{
+				case TargetType.All:
+					targets = FindObjectsOfType(type);
+					break;
+				case TargetType.Single:
+					var single = FindObjectOfType(type);
+					
+					if(single != null)
+						targets = new object[] {single};
+					break;
+				case TargetType.Registry:
+					if (registry.TryGetValue(type, out var fromRegistry))
+						targets = new object[] {fromRegistry};
+					break;
+			}
+
+			return targets ?? Array.Empty<object>();
+		}
+		
 		#endregion
 
 		#region Basic Commands
+		
 		private void RegisterBasicCommands()
 		{
 			//You can register a command by using a Method name
@@ -734,8 +858,60 @@ namespace DevConsole
 			//Or by providing a parameterless function to the delegate
 			RegisterCommand("test2", "Test.", () =>
 			{
-				Debug.Log(historySize);
+				UnityEngine.Debug.Log(historySize);
 			}, "Utility");
+		}
+
+		private async void RegisterCommandsFromAttribute()
+		{
+			int assemblyCounter = 0;
+			
+			//Search for uses of the attribute
+			var attributeType = typeof(DevCommandAttribute);
+			
+			foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+			{
+				assemblyCounter++;
+				
+				if(assemblyCounter % 50 == 0)
+					await Task.Yield(); //Just a way to spread the processing across multiple frames
+				
+				foreach (var type in assembly.GetTypes())
+				{
+					foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance))
+					{
+						var attributes = method.GetCustomAttributes(attributeType, false);
+						
+						if(attributes.Length == 0)
+							continue;
+
+						var attribute = (DevCommandAttribute) attributes[0];
+						
+						if(attribute.targetType != TargetType.None && !type.IsSubclassOf(typeof(MonoBehaviour)))
+						{
+							UnityEngine.Debug.LogError($"Class of type {type} is not a {nameof(MonoBehaviour)}. TargetType {attribute.targetType} is can only be used with {nameof(MonoBehaviour)}");
+							continue;
+						}
+						
+						//Register the method as a command
+						var parametersInfo = method.GetParameters();
+						
+						ConsoleCommand command = new ConsoleCommand()
+						{
+							name = attribute.name ?? method.Name,
+							description = attribute.description,
+							instance = null,
+							methodInfo = method,
+							parametersInfos = parametersInfo,
+							category = attribute.category,
+							targetType = attribute.targetType,
+							sourceType = type,
+						};
+						
+						commands.Add(command);
+					}
+				}
+			}
 		}
 
 		private void ClearConsole()
@@ -783,10 +959,10 @@ namespace DevConsole
 			{
 				AppendLogLine($"# Uncategorized #", helpColor);
 
-				foreach (var categoriItem in commands.Where(x => x.category == null))
+				foreach (var categoryItem in commands.Where(x => x.category == null))
 				{
-					AppendLog($"- {categoriItem.name}({categoriItem.GetParametersString()}): ", helpColor);
-					AppendLogLine($"{categoriItem.description}");
+					AppendLog($"- {categoryItem.name}({categoryItem.GetParametersString()}): ", helpColor);
+					AppendLogLine($"{categoryItem.description}");
 				}
 			}
 
@@ -805,6 +981,7 @@ namespace DevConsole
 				AppendLogLine(text);
 			}
 		}
+		
 		#endregion
 	}
 }

@@ -296,7 +296,6 @@ GameObject:
   - component: {fileID: 6216075927145279117}
   - component: {fileID: 6216075927145279116}
   - component: {fileID: 6216075927145279119}
-  - component: {fileID: 1552584743744817509}
   m_Layer: 5
   m_Name: ConsoleScreen
   m_TagString: Untagged
@@ -363,18 +362,6 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!225 &1552584743744817509
-CanvasGroup:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6216075927145279118}
-  m_Enabled: 1
-  m_Alpha: 0.5
-  m_Interactable: 1
-  m_BlocksRaycasts: 1
-  m_IgnoreParentGroups: 0
 --- !u!1 &6216075927150363174
 GameObject:
   m_ObjectHideFlags: 0
@@ -1051,7 +1038,7 @@ GameObject:
   - component: {fileID: 6216075928074730853}
   - component: {fileID: 6216075928074730852}
   m_Layer: 5
-  m_Name: DevConsole_v2
+  m_Name: DevConsole_v2.1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1156,7 +1143,7 @@ MonoBehaviour:
   showFunctionInfo: 0
   allowQuickCommands: 1
   alwaysAutoComplete: 1
-  consoleKey: f1
+  consoleKey: 96
   suggestionHighlight: {r: 0, g: 1, b: 0, a: 1}
   historySize: 100
   consoleScreen: {fileID: 6216075927145279118}
