@@ -9,6 +9,9 @@ EditorBuildSettings:
     path: Assets/Scenes/Lobby.unity
     guid: c8470aa83bf28a4429ff0bd8666bb453
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
+    path: Assets/Scenes/NGO.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 1
+    path: Assets/Scenes/NGO Relay.unity
+    guid: a2a67f02cdafb7b4baa3532accdc562f
   m_configObjects: {}
